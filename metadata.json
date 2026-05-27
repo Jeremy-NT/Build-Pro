@@ -1,0 +1,6 @@
+{
+  "name": "BuildProConnect",
+  "description": "An integrated property listing and CRM system for real estate agents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
