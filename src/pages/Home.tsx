@@ -102,12 +102,12 @@ export const Home: React.FC = () => {
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4 justify-center items-center">
-            <Link
+            {/* <Link
               to="/properties"
               className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition border border-slate-700 uppercase tracking-widest"
             >
               Explore Listings
-            </Link>
+            </Link> */}
 
             {/* 
               Guard auth-dependent CTA buttons behind loading.
