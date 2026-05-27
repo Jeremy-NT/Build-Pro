@@ -135,7 +135,7 @@ export const Home: React.FC = () => {
                   id="hero-register-btn"
                   className="px-6 py-3 bg-slate-900 border border-slate-700 text-slate-200 hover:bg-slate-800 text-xs font-bold rounded-xl transition uppercase tracking-widest"
                 >
-                  Create Account
+                 Get Started
                 </Link>
               </>
             ) : (
@@ -151,7 +151,7 @@ export const Home: React.FC = () => {
         </div>
 
         {/* Hero Compact Search Overlay */}
-        <div className="max-w-4xl mx-auto relative z-20 bg-white rounded-2xl md:rounded-full shadow-2xl p-4 md:py-3.5 md:px-6 border border-slate-100 text-slate-800">
+        {/*<div className="max-w-4xl mx-auto relative z-20 bg-white rounded-2xl md:rounded-full shadow-2xl p-4 md:py-3.5 md:px-6 border border-slate-100 text-slate-800">
           <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
             <div className="relative">
               <label className="block md:hidden text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider ml-1">Location / Area</label>
@@ -217,7 +217,7 @@ export const Home: React.FC = () => {
               </button>
             </div>
           </form>
-        </div>
+        </div>*/}
       </div>
 
       {/* 2. Platform Value Quick Stats Bar */}
@@ -405,7 +405,7 @@ export const Home: React.FC = () => {
       </div>
 
       {/* 4. Live Featured Properties Catalog */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 border-t border-slate-100">
+      {/*<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 border-t border-slate-100">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10">
           <div>
             <div className="flex items-center gap-1.5 text-blue-605 text-xs font-bold font-mono uppercase tracking-wider mb-2">
@@ -447,7 +447,7 @@ export const Home: React.FC = () => {
               Real estate properties registered inside Supabase tables will appear on this interactive section dynamically.
             </p>
             {/* Guard the role-based CTA inside empty state too */}
-            {!loading && (profile?.role === 'agent' || profile?.role === 'admin') ? (
+   {/*         {!loading && (profile?.role === 'agent' || profile?.role === 'admin') ? (
               <Link
                 to="/dashboard"
                 className="inline-flex py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl"
@@ -459,7 +459,7 @@ export const Home: React.FC = () => {
             )}
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* 5. Sleek Visual CRM Bento Features Highlight */}
       <div className="border-t border-slate-100 bg-white py-20">
@@ -634,12 +634,7 @@ export const Home: React.FC = () => {
               >
                 Register Free Account
               </Link>
-              <Link
-                to="/properties"
-                className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 font-bold text-xs uppercase tracking-widest rounded-xl transition"
-              >
-                Go Browse Homes
-              </Link>
+            
             </div>
           </div>
         </div>
