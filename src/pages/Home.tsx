@@ -477,7 +477,7 @@ export const Home: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-150 relative overflow-hidden group hover:border-blue-200 transition">
+            <div className="bg-slate-50 p-6 rounded-2xl  relative overflow-hidden group hover:bg-blue-100 transition">
               <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-5 border border-blue-100">
                 <TrendingUp className="w-5 h-5" />
               </div>
@@ -487,7 +487,7 @@ export const Home: React.FC = () => {
               </p>
             </div>
 
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-150 relative overflow-hidden group hover:border-blue-200 transition">
+            <div className="bg-slate-50 p-6 rounded-2xl  relative overflow-hidden group hover:bg-blue-100 transition">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-5 border border-emerald-100">
                 <Calendar className="w-5 h-5" />
               </div>
@@ -497,7 +497,7 @@ export const Home: React.FC = () => {
               </p>
             </div>
 
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-150 relative overflow-hidden group hover:border-blue-200 transition">
+            <div className="bg-slate-50 p-6 rounded-2xl  relative overflow-hidden group hover:bg-blue-100 transition">
               <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center mb-5 border border-indigo-100">
                 <CheckCircle2 className="w-5 h-5" />
               </div>

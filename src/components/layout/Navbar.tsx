@@ -11,15 +11,15 @@ import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 
 export const Navbar: React.FC = () => {
-  const { session, profile, signOut, loading } = useAuth(); // ← loading added
+  const { session, profile, signOut, loading } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [bellOpen, setBellOpen] = useState(false);
 
   const userId = session?.user?.id;
   const isAgentOrAdmin = profile?.role === 'agent' || profile?.role === 'admin';
+  const isAuthenticated = !loading && !!session;
 
-  // Fetch agent pending reminders for the Reminder Bell Popover
   const { data: pendingReminders, refetch: refetchReminders } = useQuery<any[]>({
     queryKey: ['navbarReminders', userId],
     queryFn: async () => {
@@ -61,7 +61,7 @@ export const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
 
-          {/* Logo & Links Panel */}
+          {/* Logo */}
           <div className="flex items-center">
             <Link to="/" className="flex items-center gap-2 group cursor-pointer">
               <div className="bg-blue-600 p-2 rounded-xl text-white shadow shadow-blue-500/20 group-hover:scale-105 transition">
@@ -72,26 +72,25 @@ export const Navbar: React.FC = () => {
               </span>
             </Link>
 
-            <div className="hidden md:ml-8 md:flex space-x-6 text-sm">
-              <NavLink
-                to="/"
-                className={({ isActive }) =>
-                  `font-semibold transition ${isActive ? 'text-blue-400' : 'text-slate-300 hover:text-white'}`
-                }
-              >
-                Home
-              </NavLink>
-              <NavLink
-                to="/properties"
-                className={({ isActive }) =>
-                  `font-semibold transition ${isActive ? 'text-blue-400' : 'text-slate-300 hover:text-white'}`
-                }
-              >
-                Properties
-              </NavLink>
-
-              {/* Only show My Workspace once auth is confirmed and session exists */}
-              {!loading && session && (
+            {/* Nav links — only visible to authenticated users */}
+            {isAuthenticated && (
+              <div className="hidden md:ml-8 md:flex space-x-6 text-sm">
+                <NavLink
+                  to="/"
+                  className={({ isActive }) =>
+                    `font-semibold transition ${isActive ? 'text-blue-400' : 'text-slate-300 hover:text-white'}`
+                  }
+                >
+                  Home
+                </NavLink>
+                <NavLink
+                  to="/properties"
+                  className={({ isActive }) =>
+                    `font-semibold transition ${isActive ? 'text-blue-400' : 'text-slate-300 hover:text-white'}`
+                  }
+                >
+                  Properties
+                </NavLink>
                 <NavLink
                   to={profile?.role === 'client' ? '/portal' : '/dashboard'}
                   className={({ isActive }) =>
@@ -100,20 +99,14 @@ export const Navbar: React.FC = () => {
                 >
                   My Workspace
                 </NavLink>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Authentication State panel + Reminder Bell */}
+          {/* Right side — auth area */}
           <div className="hidden md:flex items-center gap-4">
-
-            {/* 
-              Guard everything behind loading.
-              While loading: show a neutral skeleton pill.
-              After loading: show the correct state (logged in or logged out).
-            */}
             {loading ? (
-              // Neutral placeholder — prevents flash of wrong content
+              // Skeleton while auth resolves
               <div className="flex items-center gap-3 bg-slate-800/40 p-1.5 pr-4 rounded-full border border-slate-800">
                 <div className="w-8 h-8 rounded-full bg-slate-700 animate-pulse" />
                 <div className="space-y-1.5">
@@ -121,10 +114,10 @@ export const Navbar: React.FC = () => {
                   <div className="w-12 h-2 bg-slate-700 rounded animate-pulse" />
                 </div>
               </div>
-            ) : (
+            ) : session ? (
               <>
-                {/* Reminder Bell — only for confirmed agent/admin sessions */}
-                {session && isAgentOrAdmin && (
+                {/* Reminder Bell — agents/admins only */}
+                {isAgentOrAdmin && (
                   <div className="relative">
                     <button
                       onClick={() => setBellOpen(!bellOpen)}
@@ -134,7 +127,6 @@ export const Navbar: React.FC = () => {
                       title="Timeline reminders"
                     >
                       <Bell className="w-5 h-5" />
-
                       {pendingReminders && pendingReminders.length > 0 && (
                         <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow border ${
                           hasOverdue
@@ -212,44 +204,43 @@ export const Navbar: React.FC = () => {
                   </div>
                 )}
 
-                {/* User pill or Sign In / Register */}
-                {session ? (
-                  <div className="flex items-center gap-4 bg-slate-800/50 hover:bg-slate-850/80 p-1.5 pr-4 rounded-full border border-slate-800 transition">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 border border-blue-500 flex items-center justify-center text-white text-xs font-bold font-mono">
-                      {profile?.full_name?.charAt(0).toUpperCase() || <User className="w-4 h-4" />}
-                    </div>
-                    <div className="text-left leading-none">
-                      <span className="block text-xs font-bold text-slate-100">{profile?.full_name || 'My Account'}</span>
-                      <span className="text-[9px] font-mono font-semibold tracking-wider text-blue-400 uppercase leading-none mt-0.5 block">
-                        {profile?.role || 'User'}
-                      </span>
-                    </div>
-                    <div className="h-4 w-[1px] bg-slate-700 mx-1"></div>
-                    <button
-                      onClick={handleLogout}
-                      className="p-1 text-slate-400 hover:text-red-400 hover:bg-slate-800/80 rounded-full transition cursor-pointer"
-                      title="Logout Session"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </button>
+                {/* User pill */}
+                <div className="flex items-center gap-4 bg-slate-800/50 hover:bg-slate-850/80 p-1.5 pr-4 rounded-full border border-slate-800 transition">
+                  <div className="w-8 h-8 rounded-full bg-blue-600 border border-blue-500 flex items-center justify-center text-white text-xs font-bold font-mono">
+                    {profile?.full_name?.charAt(0).toUpperCase() || <User className="w-4 h-4" />}
                   </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <Link
-                      to="/login"
-                      className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-xl transition cursor-pointer"
-                    >
-                      Sign In
-                    </Link>
-                    <Link
-                      to="/register"
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/10 transition cursor-pointer"
-                    >
-                      Register Account
-                    </Link>
+                  <div className="text-left leading-none">
+                    <span className="block text-xs font-bold text-slate-100">{profile?.full_name || 'My Account'}</span>
+                    <span className="text-[9px] font-mono font-semibold tracking-wider text-blue-400 uppercase leading-none mt-0.5 block">
+                      {profile?.role || 'User'}
+                    </span>
                   </div>
-                )}
+                  <div className="h-4 w-[1px] bg-slate-700 mx-1"></div>
+                  <button
+                    onClick={handleLogout}
+                    className="p-1 text-slate-400 hover:text-red-400 hover:bg-slate-800/80 rounded-full transition cursor-pointer"
+                    title="Logout Session"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
               </>
+            ) : (
+              // Not authenticated — only show auth buttons
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/login"
+                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-xl transition cursor-pointer"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to="/register"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/10 transition cursor-pointer"
+                >
+                  Register Account
+                </Link>
+              </div>
             )}
           </div>
 
@@ -257,7 +248,7 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center md:hidden">
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
-              className="p-2 text-slate-350 hover:text-white hover:bg-slate-800 rounded-lg transition animate-hover"
+              className="p-2 text-slate-350 hover:text-white hover:bg-slate-800 rounded-lg transition"
             >
               {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -269,39 +260,36 @@ export const Navbar: React.FC = () => {
       {/* Mobile panel */}
       {mobileOpen && (
         <div className="md:hidden border-t border-slate-800 bg-slate-900/95 backdrop-blur-md px-4 py-3 space-y-3">
-          <Link
-            to="/"
-            onClick={() => setMobileOpen(false)}
-            className="block px-3 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 text-slate-200 hover:text-white"
-          >
-            Home
-          </Link>
-          <Link
-            to="/properties"
-            onClick={() => setMobileOpen(false)}
-            className="block px-3 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 text-slate-200 hover:text-white"
-          >
-            Properties
-          </Link>
 
-          {/* Only show My Workspace once auth is confirmed */}
-          {!loading && session && (
-            <Link
-              to={profile?.role === 'client' ? '/portal' : '/dashboard'}
-              onClick={() => setMobileOpen(false)}
-              className="block px-3 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 text-slate-200 hover:text-white"
-            >
-              My Workspace
-            </Link>
+          {/* Nav links — authenticated only */}
+          {isAuthenticated && (
+            <>
+              <Link
+                to="/"
+                onClick={() => setMobileOpen(false)}
+                className="block px-3 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 text-slate-200 hover:text-white"
+              >
+                Home
+              </Link>
+              <Link
+                to="/properties"
+                onClick={() => setMobileOpen(false)}
+                className="block px-3 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 text-slate-200 hover:text-white"
+              >
+                Properties
+              </Link>
+              <Link
+                to={profile?.role === 'client' ? '/portal' : '/dashboard'}
+                onClick={() => setMobileOpen(false)}
+                className="block px-3 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 text-slate-200 hover:text-white"
+              >
+                My Workspace
+              </Link>
+            </>
           )}
 
-          {/* 
-            Mobile auth section:
-            - loading: show skeleton
-            - loaded + session: show user info + logout
-            - loaded + no session: show Sign In / Register
-          */}
-          <div className="border-t border-slate-800 pt-3">
+          {/* Mobile auth section */}
+          <div className={isAuthenticated ? 'border-t border-slate-800 pt-3' : ''}>
             {loading ? (
               <div className="flex items-center gap-3 px-1">
                 <div className="w-8 h-8 rounded-full bg-slate-700 animate-pulse shrink-0" />
