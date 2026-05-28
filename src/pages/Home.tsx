@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { PropertyCard, Property } from '../components/PropertyCard';
@@ -19,7 +19,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 
 export const Home: React.FC = () => {
-  const { session, profile, loading } = useAuth(); // ← loading added
+  const { session, profile } = useAuth();
   const [location, setLocation] = useState('');
   const [propertyType, setPropertyType] = useState('all');
   const [listingType, setListingType] = useState('all');
@@ -110,18 +110,11 @@ export const Home: React.FC = () => {
             </Link> */}
 
             {/* 
-              Guard auth-dependent CTA buttons behind loading.
-              - loading: show neutral placeholder buttons
-              - loaded + no session: show Sign In + Create Account
-              - loaded + session: show Go to Console
+              Guard auth-dependent CTA buttons.
+              - no session: show Sign In + Create Account
+              - session: show Go to Console
             */}
-            {loading ? (
-              // Neutral skeleton placeholders — same size as real buttons to prevent layout shift
-              <>
-                <div className="px-6 py-3 w-24 h-9 bg-slate-700/50 rounded-xl animate-pulse" />
-                <div className="px-6 py-3 w-32 h-9 bg-slate-700/30 rounded-xl animate-pulse" />
-              </>
-            ) : !session ? (
+            {!session ? (
               <>
                 <Link
                   to="/login"

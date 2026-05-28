@@ -1,45 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../lib/supabase';
-import { 
-  Building2, LogOut, User, Menu, X, Landmark, 
-  Bell, AlertTriangle, CalendarDays, Clock, ChevronRight
-} from 'lucide-react';
+import { Building2, LogOut, User, Menu, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { format } from 'date-fns';
 
 export const Navbar: React.FC = () => {
-  const { session, profile, signOut, loading } = useAuth();
+  const { session, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [bellOpen, setBellOpen] = useState(false);
 
-  const userId = session?.user?.id;
-  const isAgentOrAdmin = profile?.role === 'agent' || profile?.role === 'admin';
-  const isAuthenticated = !loading && !!session;
-
-  const { data: pendingReminders, refetch: refetchReminders } = useQuery<any[]>({
-    queryKey: ['navbarReminders', userId],
-    queryFn: async () => {
-      if (!userId) return [];
-      const { data, error } = await supabase
-        .from('reminders')
-        .select('*')
-        .eq('agent_id', userId)
-        .eq('status', 'pending')
-        .order('due_at', { ascending: true });
-
-      if (error) {
-        console.warn('Popover reminders query error:', error);
-        return [];
-      }
-      return data || [];
-    },
-    enabled: !!userId && isAgentOrAdmin,
-    refetchInterval: 30000,
-  });
+  const isAuthenticated = !!session;
 
   const handleLogout = async () => {
     try {
@@ -50,11 +20,6 @@ export const Navbar: React.FC = () => {
       toast.error('Failed to log out');
     }
   };
-
-  const now = new Date();
-  const overdueReminders = (pendingReminders || []).filter(rem => new Date(rem.due_at) < now);
-  const hasOverdue = overdueReminders.length > 0;
-  const nextReminders = (pendingReminders || []).slice(0, 5);
 
   return (
     <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 text-white font-sans shadow-lg">
@@ -97,7 +62,7 @@ export const Navbar: React.FC = () => {
                     `font-semibold transition ${isActive ? 'text-blue-400' : 'text-slate-300 hover:text-white'}`
                   }
                 >
-                  My Workspace
+                  My workspace
                 </NavLink>
               </div>
             )}
@@ -105,105 +70,8 @@ export const Navbar: React.FC = () => {
 
           {/* Right side — auth area */}
           <div className="hidden md:flex items-center gap-4">
-            {loading ? (
-              // Skeleton while auth resolves
-              <div className="flex items-center gap-3 bg-slate-800/40 p-1.5 pr-4 rounded-full border border-slate-800">
-                <div className="w-8 h-8 rounded-full bg-slate-700 animate-pulse" />
-                <div className="space-y-1.5">
-                  <div className="w-20 h-2.5 bg-slate-700 rounded animate-pulse" />
-                  <div className="w-12 h-2 bg-slate-700 rounded animate-pulse" />
-                </div>
-              </div>
-            ) : session ? (
+            {session ? (
               <>
-                {/* Reminder Bell — agents/admins only */}
-                {isAgentOrAdmin && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setBellOpen(!bellOpen)}
-                      className={`p-2 rounded-xl border border-slate-850 hover:bg-slate-800 transition cursor-pointer relative ${
-                        bellOpen ? 'bg-slate-800 text-blue-400' : 'text-slate-300 hover:text-white'
-                      }`}
-                      title="Timeline reminders"
-                    >
-                      <Bell className="w-5 h-5" />
-                      {pendingReminders && pendingReminders.length > 0 && (
-                        <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow border ${
-                          hasOverdue
-                            ? 'bg-red-600 border-red-500 animate-pulse'
-                            : 'bg-amber-500 border-amber-400'
-                        }`}>
-                          {pendingReminders.length}
-                        </span>
-                      )}
-                    </button>
-
-                    {bellOpen && (
-                      <div className="absolute right-0 mt-3 w-80 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl p-4 z-50 text-xs text-slate-100 font-sans space-y-3 animate-in fade-in duration-200">
-                        <div className="flex justify-between items-center border-b border-slate-850 pb-2.5">
-                          <div>
-                            <h4 className="font-bold text-white text-[12px]">Agenda Reminders</h4>
-                            {hasOverdue && (
-                              <span className="text-[10px] text-red-500 font-bold block mt-0.5">⚠️ Overdue tasks detected!</span>
-                            )}
-                          </div>
-                          <span className="text-[10px] bg-slate-850 px-2 py-0.5 rounded text-slate-400 font-mono font-bold uppercase shrink-0">
-                            Pending: {pendingReminders?.length || 0}
-                          </span>
-                        </div>
-
-                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                          {nextReminders && nextReminders.length > 0 ? (
-                            nextReminders.map((rem) => {
-                              const isOverdue = new Date(rem.due_at) < now;
-                              return (
-                                <div
-                                  key={rem.id}
-                                  onClick={() => {
-                                    setBellOpen(false);
-                                    navigate('/dashboard/reminders');
-                                  }}
-                                  className={`p-2.5 bg-slate-900/60 hover:bg-slate-850 border rounded-xl cursor-pointer transition leading-tight flex items-start gap-2 ${
-                                    isOverdue ? 'border-red-900/60 bg-red-950/10' : 'border-slate-850'
-                                  }`}
-                                >
-                                  {isOverdue ? (
-                                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
-                                  ) : (
-                                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                                  )}
-                                  <div className="text-left flex-1 min-w-0">
-                                    <p className="font-bold text-slate-200 truncate">{rem.title}</p>
-                                    <p className={`text-[10px] font-mono mt-1 font-semibold ${isOverdue ? 'text-red-400 font-extrabold' : 'text-slate-400'}`}>
-                                      {format(new Date(rem.due_at), 'MMM d, h:mm a')}
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <div className="text-center py-6 text-slate-500">
-                              <p>No upcoming timelines pending.</p>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="border-t border-slate-850 pt-2 flex items-center justify-center">
-                          <button
-                            onClick={() => {
-                              setBellOpen(false);
-                              navigate('/dashboard/reminders');
-                            }}
-                            className="text-[10.5px] font-bold text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5 uppercase tracking-wide cursor-pointer py-1"
-                          >
-                            Launch Reminders Console <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* User pill */}
                 <div className="flex items-center gap-4 bg-slate-800/50 hover:bg-slate-850/80 p-1.5 pr-4 rounded-full border border-slate-800 transition">
                   <div className="w-8 h-8 rounded-full bg-blue-600 border border-blue-500 flex items-center justify-center text-white text-xs font-bold font-mono">
@@ -290,15 +158,7 @@ export const Navbar: React.FC = () => {
 
           {/* Mobile auth section */}
           <div className={isAuthenticated ? 'border-t border-slate-800 pt-3' : ''}>
-            {loading ? (
-              <div className="flex items-center gap-3 px-1">
-                <div className="w-8 h-8 rounded-full bg-slate-700 animate-pulse shrink-0" />
-                <div className="space-y-1.5 flex-1">
-                  <div className="w-24 h-2.5 bg-slate-700 rounded animate-pulse" />
-                  <div className="w-14 h-2 bg-slate-700 rounded animate-pulse" />
-                </div>
-              </div>
-            ) : session ? (
+            {session ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold font-mono">
