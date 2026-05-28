@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { User, Session } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import { User, Session } from "@supabase/supabase-js";
 
 export interface Profile {
   id: string;
   full_name: string;
-  role: 'agent' | 'admin' | 'client';
+  role: "agent" | "admin" | "client";
   phone?: string;
   avatar_url?: string;
   created_at?: string;
@@ -23,7 +23,9 @@ export interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -32,24 +34,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error);
+        console.error("Error fetching profile:", error);
         // Fallback profile if the database trigger didn't finish or custom data hasn't written
         setProfile({
           id: userId,
-          full_name: 'User',
-          role: 'client',
+          full_name: "User",
+          role: "client",
         });
       } else {
         setProfile(data as Profile);
       }
     } catch (err) {
-      console.error('Failed to fetch profile:', err);
+      console.error("Failed to fetch profile:", err);
     }
   };
 
@@ -66,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setProfile(null);
     } catch (error) {
-      console.error('Error in signOut:', error);
+      console.error("Error in signOut:", error);
     }
   };
 
@@ -74,39 +76,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return;
-      
+
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
-        fetchProfile(session.user.id).finally(() => {
-          if (mounted) setLoading(false);
-        });
-      } else {
-        setLoading(false);
+        // Fetch profile and then mark loading complete
+        await fetchProfile(session.user.id);
       }
+
+      setLoading(false);
     });
 
     // Listen to authentication state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        if (!mounted) return;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      if (!mounted) return;
 
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
 
-        if (currentSession?.user) {
-          setLoading(true);
-          await fetchProfile(currentSession.user.id);
-          if (mounted) setLoading(false);
-        } else {
-          setProfile(null);
-          setLoading(false);
-        }
+      if (currentSession?.user) {
+        // Wait for profile to load before marking loading complete
+        await fetchProfile(currentSession.user.id);
+        setLoading(false);
+      } else {
+        setProfile(null);
+        setLoading(false);
       }
-    );
+    });
 
     return () => {
       mounted = false;
@@ -133,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuthContext = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuthContext must be used within an AuthProvider');
+    throw new Error("useAuthContext must be used within an AuthProvider");
   }
   return context;
 };
