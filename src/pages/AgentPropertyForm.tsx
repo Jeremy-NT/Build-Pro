@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import {
   Trash, Loader2, AlertCircle, FileImage, Sparkles 
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { PROPERTY_TYPES, PROPERTY_STATUSES } from '../shared/constants/domain';
 
 // Definition of form validation schema with Zod
 const propertyFormSchema = z.object({
@@ -77,7 +78,7 @@ export const AgentPropertyForm: React.FC<AgentPropertyFormProps> = ({ isEdit = f
     watch,
     formState: { errors },
   } = useForm<PropertyFormValues>({
-    resolver: zodResolver(propertyFormSchema) as any,
+    resolver: zodResolver(propertyFormSchema) as Resolver<PropertyFormValues>,
     defaultValues: {
       title: '',
       description: '',
@@ -207,9 +208,9 @@ export const AgentPropertyForm: React.FC<AgentPropertyFormProps> = ({ isEdit = f
       if (uploadedCount > 0) {
         toast.success(`Successfully uploaded ${uploadedCount} listing image(s).`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Error occurred while saving image files.');
+      toast.error(err instanceof Error ? err.message : 'Error occurred while saving image files.');
     } finally {
       setUploadingFiles(false);
       // Clear input so we can select same file again if removed
@@ -298,8 +299,8 @@ export const AgentPropertyForm: React.FC<AgentPropertyFormProps> = ({ isEdit = f
       queryClient.invalidateQueries({ queryKey: ['propertyDetail', id] });
       navigate('/dashboard/properties');
     },
-    onError: (err: any) => {
-      toast.error(err.message || 'Database transaction error occurred.');
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Database transaction error occurred.');
     }
   });
 
@@ -337,7 +338,7 @@ export const AgentPropertyForm: React.FC<AgentPropertyFormProps> = ({ isEdit = f
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         
         {/* Core parameters card */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-5">
@@ -379,11 +380,11 @@ export const AgentPropertyForm: React.FC<AgentPropertyFormProps> = ({ isEdit = f
                 {...register('property_type')}
                 className="w-full text-xs font-sans px-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 font-semibold focus:outline-none"
               >
-                <option value="apartment">Apartment</option>
-                <option value="house">House</option>
-                <option value="studio">Studio</option>
-                <option value="commercial">Commercial</option>
-                <option value="land">Land</option>
+                {PROPERTY_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -460,10 +461,11 @@ export const AgentPropertyForm: React.FC<AgentPropertyFormProps> = ({ isEdit = f
                 {...register('status')}
                 className="w-full text-xs font-sans px-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="available">Available</option>
-                <option value="sold">Sold</option>
-                <option value="rented">Rented</option>
-                <option value="archived">Archived</option>
+                {PROPERTY_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </option>
+                ))}
               </select>
             </div>
 
