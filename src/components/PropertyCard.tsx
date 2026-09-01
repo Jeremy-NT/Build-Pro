@@ -1,25 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, BedDouble, Bath, Maximize, Home } from 'lucide-react';
-
-export interface Property {
-  id: string;
-  title: string;
-  description: string;
-  property_type: 'apartment' | 'house' | 'land' | 'commercial' | 'studio';
-  listing_type: 'sale' | 'rent';
-  price: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  area_sqm?: number;
-  location_city: string;
-  location_area: string;
-  location_address?: string;
-  status: string;
-  image_urls?: string[];
-  amenities?: string[];
-  created_at: string;
-}
+import { formatPriceCompact } from '../shared/utils/format';
+import type { Property } from '../shared/types/domain';
 
 interface PropertyCardProps {
   property: Property;
@@ -41,12 +24,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
     image_urls,
   } = property;
 
-  // Format price as GH₵ X,XXX,XXX
-  const formattedPrice = new Intl.NumberFormat('en-GH', {
-    style: 'currency',
-    currency: 'GHS',
-    maximumFractionDigits: 0,
-  }).format(price).replace('GHS', 'GH₵').replace('GH₵ ', 'GH₵ '); // handle potential narrow NBSP
+  const formattedPrice = formatPriceCompact(price);
 
   // Hide bed/bath badges for land / commercial
   const isLandOrCommercial = property_type === 'land' || property_type === 'commercial';

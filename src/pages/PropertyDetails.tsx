@@ -12,6 +12,7 @@ import { toast } from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { formatPriceCompact } from '../shared/utils/format';
 
 const inquirySchema = z.object({
   senderName: z.string().min(2, { message: 'Name must be at least 2 characters' }),
@@ -51,7 +52,7 @@ export const PropertyDetails: React.FC = () => {
     if (session && authProfile) {
       setValue('senderName', authProfile.full_name || '');
       // Try profile email, or fallback to user email
-      setValue('senderEmail', (session.user as any)?.email || '');
+      setValue('senderEmail', session.user.email || '');
       setValue('senderPhone', authProfile.phone || '');
     }
   }, [session, authProfile, setValue]);
@@ -119,13 +120,13 @@ export const PropertyDetails: React.FC = () => {
       toast.success('Inquiry submitted successfully! An agent will respond shortly.');
       reset({
         senderName: authProfile?.full_name || '',
-        senderEmail: (session?.user as any)?.email || '',
+        senderEmail: session?.user?.email || '',
         senderPhone: authProfile?.phone || '',
         message: 'I would like to request more information about this property and schedule a convenient viewing.',
       });
     },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error transmitting inquiry records.');
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Error transmitting inquiry records.');
     }
   });
 
@@ -160,11 +161,7 @@ export const PropertyDetails: React.FC = () => {
   const hasImages = imageList.length > 0;
 
   // Price formatting helper
-  const formattedPrice = new Intl.NumberFormat('en-GH', {
-    style: 'currency',
-    currency: 'GHS',
-    maximumFractionDigits: 0,
-  }).format(property.price).replace('GHS', 'GH₵').replace('GH₵ ', 'GH₵ '); // normalize narrow NBSP format
+  const formattedPrice = formatPriceCompact(property.price);
 
   // Slider buttons helper
   const nextImage = () => {

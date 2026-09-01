@@ -7,7 +7,8 @@ import {
   Trash, Eye, Loader2, RefreshCw, X, Building, Home
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { Property } from '../components/PropertyCard';
+import type { Property } from '../shared/types/domain';
+import { formatPriceCompact } from '../shared/utils/format';
 
 export const AgentPropertiesList: React.FC = () => {
   const navigate = useNavigate();
@@ -77,15 +78,6 @@ export const AgentPropertiesList: React.FC = () => {
     
     return matchesSearch && matchesStatus;
   });
-
-  // Price currency formatting helper
-  const formatGHS = (val: number) => {
-    return new Intl.NumberFormat('en-GH', {
-      style: 'currency',
-      currency: 'GHS',
-      maximumFractionDigits: 0,
-    }).format(val).replace('GHS', 'GH₵').replace('GH₵ ', 'GH₵ ');
-  };
 
   // Status badge style helper
   const getStatusBadge = (statusVal: string) => {
@@ -246,7 +238,7 @@ export const AgentPropertiesList: React.FC = () => {
 
                     {/* Valuation Price */}
                     <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                      {formatGHS(prop.price)}
+                      {formatPriceCompact(prop.price)}
                     </td>
 
                     {/* Status Badge */}

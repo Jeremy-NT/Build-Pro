@@ -2,12 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { PropertyCard, Property } from '../components/PropertyCard';
+import { PropertyCard } from '../components/PropertyCard';
+import type { Property } from '../shared/types/domain';
 import { useAuth } from '../hooks/useAuth';
 import { 
   Building2, MapPin, Grid, List, Search, SlidersHorizontal, X, 
   RefreshCw, Home, ChevronLeft, ChevronRight, Plus
 } from 'lucide-react';
+import { formatPriceCompact } from '../shared/utils/format';
+import { PROPERTY_TYPES } from '../shared/constants/domain';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -148,14 +151,6 @@ export const PropertiesBrowse: React.FC = () => {
     );
   };
 
-  const formatGHS = (priceVal: number) => {
-    return new Intl.NumberFormat('en-GH', {
-      style: 'currency',
-      currency: 'GHS',
-      maximumFractionDigits: 0,
-    }).format(priceVal).replace('GHS', 'GH₵');
-  };
-
   const activeFilterCount = [
     locationText.trim(),
     minPrice,
@@ -279,7 +274,7 @@ export const PropertiesBrowse: React.FC = () => {
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2.5">Architectural Layout</label>
                 <div className="space-y-2">
-                  {['apartment', 'house', 'land', 'commercial', 'studio'].map((t) => (
+                  {PROPERTY_TYPES.map((t) => (
                     <label key={t} className="flex items-center gap-3 text-xs font-medium text-slate-600 cursor-pointer capitalize select-none group transition-colors hover:text-slate-900">
                       <input
                         type="checkbox"
@@ -449,7 +444,7 @@ export const PropertiesBrowse: React.FC = () => {
 
                           <div className="flex items-center gap-3">
                             <span className="font-sans font-bold text-base text-slate-900 mr-2">
-                              {prop.listing_type === 'sale' ? formatGHS(prop.price) : `${formatGHS(prop.price)}/mo`}
+                              {prop.listing_type === 'sale' ? formatPriceCompact(prop.price) : `${formatPriceCompact(prop.price)}/mo`}
                             </span>
                             <Link
                               to={`/properties/${prop.id}`}

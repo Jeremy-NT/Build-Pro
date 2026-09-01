@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
-import { PropertyCard, Property } from "../components/PropertyCard";
+import { PropertyCard } from "../components/PropertyCard";
+import type { Property } from "../shared/types/domain";
 import {
   Search,
   Building2,
