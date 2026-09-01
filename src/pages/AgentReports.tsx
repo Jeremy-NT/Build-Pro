@@ -7,8 +7,8 @@ import {
   PieChart, Pie, Cell 
 } from 'recharts';
 import { startOfWeek, format, parseISO } from 'date-fns';
-import { LoadingSpinner, EmptyState } from '../components/common/FeedbackStates';
-import { formatDateString } from '../lib/format';
+import { LoadingSpinner, EmptyState } from '../shared/components/FeedbackStates';
+import { formatDateString } from '../shared/utils/format';
 import { TrendingUp, FileText, BarChart3, PieChartIcon, ArrowRight, HelpCircle } from 'lucide-react';
 
 export const AgentReports: React.FC = () => {

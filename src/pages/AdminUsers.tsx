@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState } from '../components/common/FeedbackStates';
-import { formatDateString } from '../lib/format';
+import { LoadingSpinner, EmptyState } from '../shared/components/FeedbackStates';
+import { formatDateString } from '../shared/utils/format';
 import { toast } from 'react-hot-toast';
 import { 
   Users, UserCheck, Shield, ToggleLeft, ToggleRight, Loader2, Search, Filter, Ban, CheckCircle 
