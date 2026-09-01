@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, User, Phone, Mail, Building, Tag, Compass, FileText, Calendar, 
-  MessageSquare, PlusCircle, Check, Loader2, Play, AlertCircle, Clock, CheckCircle, 
+  MessageSquare, PlusCircle, Check, Play, AlertCircle, Clock, CheckCircle, 
   ChevronRight, CalendarDays, ExternalLink
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
+import { useAuth } from '../hooks/useAuth';
+import { useAgentPropertiesBriefQuery } from '../features/properties/hooks/usePropertyQueries';
+import { clientQueryKeys, useClientDetailQuery, useUpdateClientMutation } from '../features/clients/hooks/useClientQueries';
+import { interactionQueryKeys, useClientInteractionsQuery, useCreateInteractionMutation } from '../features/interactions/hooks/useInteractionQueries';
+import { reminderQueryKeys, useClientRemindersQuery, useCreateReminderMutation } from '../features/reminders/hooks/useReminderQueries';
+import { useClientOriginInquiryQuery } from '../features/inquiries/hooks/useInquiryQueries';
+import { LoadingSpinner, ErrorState } from '../shared/components/FeedbackStates';
+import { getErrorMessage } from '../shared/utils/error';
 
 interface Client {
   id: string;
@@ -57,6 +64,8 @@ interface Property {
 export const ClientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id;
 
   // Dialog Overlays states
   const [showInteractionModal, setShowInteractionModal] = useState(false);
@@ -73,127 +82,33 @@ export const ClientDetail: React.FC = () => {
   const [editedNotes, setEditedNotes] = useState('');
 
   // Fetch agent properties to populate optional select in reminder setter
-  const { data: agentProperties } = useQuery<Property[]>({
-    queryKey: ['agentPropertiesBrief'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('properties')
-        .select('id, title')
-        .order('title');
-      if (error) throw error;
-      return data || [];
-    }
-  });
+  const { data: agentProperties = [] } = useAgentPropertiesBriefQuery(userId);
 
   // Fetch client row 
-  const { data: client, isLoading: isClientLoading, isError: isClientError } = useQuery<Client>({
-    queryKey: ['clientDetail', id],
-    queryFn: async () => {
-      if (!id) throw new Error('No client UUID');
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (error) throw error;
-      
-      // Keep inline edit states in sync
-      if (data) {
-        setEditedName(data.full_name || '');
-        setEditedEmail(data.email || '');
-        setEditedPhone(data.phone || '');
-        setEditedType(data.client_type || 'buyer');
-        setEditedStatus(data.status || 'lead');
-        setEditedSource(data.source || '');
-        setEditedNotes(data.notes || '');
-      }
+  const { data: client, isLoading: isClientLoading, isError: isClientError, error: clientError, refetch: refetchClient } = useClientDetailQuery(id);
 
-      return data as Client;
-    }
-  });
+  useEffect(() => {
+    if (!client) return;
+    setEditedName(client.full_name || '');
+    setEditedEmail(client.email || '');
+    setEditedPhone(client.phone || '');
+    setEditedType(client.client_type || 'buyer');
+    setEditedStatus(client.status || 'lead');
+    setEditedSource(client.source || '');
+    setEditedNotes(client.notes || '');
+  }, [client]);
 
   // Fetch associated interactions
-  const { data: interactions } = useQuery<Interaction[]>({
-    queryKey: ['clientInteractions', id],
-    queryFn: async () => {
-      if (!id) return [];
-      const { data, error } = await supabase
-        .from('interactions')
-        .select('*')
-        .eq('client_id', id)
-        .order('occurred_at', { ascending: false });
-      if (error) throw error;
-      return data as Interaction[];
-    },
-    enabled: !!id
-  });
+  const { data: interactions = [] } = useClientInteractionsQuery(id);
 
   // Fetch associated reminders
-  const { data: reminders } = useQuery<Reminder[]>({
-    queryKey: ['clientReminders', id],
-    queryFn: async () => {
-      if (!id) return [];
-      const { data, error } = await supabase
-        .from('reminders')
-        .select('*, properties(title)')
-        .eq('client_id', id)
-        .order('due_at', { ascending: true });
-      if (error) throw error;
-      return data as any[];
-    },
-    enabled: !!id
-  });
+  const { data: reminders = [] } = useClientRemindersQuery(id);
 
   // Check if this client was potentially created from an inquiry (look for inquiry with matching email)
-  const { data: associatedInquiry } = useQuery({
-    queryKey: ['clientOriginInquiry', client?.email],
-    queryFn: async () => {
-      if (!client?.email) return null;
-      const { data, error } = await supabase
-        .from('inquiries')
-        .select('id, message, property_id')
-        .eq('sender_email', client.email)
-        .limit(1);
-      
-      if (error) {
-        console.warn('Error reading originating inquiries:', error);
-        return null;
-      }
-      return data && data.length > 0 ? data[0] : null;
-    },
-    enabled: !!client?.email
-  });
+  const { data: associatedInquiry } = useClientOriginInquiryQuery(client?.email || undefined);
 
   // UPDATE Profile mutation
-  const updateProfileMutation = useMutation({
-    mutationFn: async () => {
-      if (!id) return;
-      const { error } = await supabase
-        .from('clients')
-        .update({
-          full_name: editedName,
-          email: editedEmail || null,
-          phone: editedPhone || null,
-          client_type: editedType,
-          status: editedStatus,
-          notes: editedNotes || null,
-          source: editedSource || null
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Client profile parameters updated.');
-      setIsEditingProfile(false);
-      queryClient.invalidateQueries({ queryKey: ['clientDetail', id] });
-      queryClient.invalidateQueries({ queryKey: ['agentClients'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error occurred while saving profile changes.');
-    }
-  });
+  const updateProfileMutation = useUpdateClientMutation(id);
 
   // ADD Interaction mutation
   const [interactionType, setInteractionType] = useState<'call' | 'email' | 'meeting' | 'site_visit' | 'whatsapp' | 'note'>('call');
@@ -201,74 +116,14 @@ export const ClientDetail: React.FC = () => {
   const [interactionOutcome, setInteractionOutcome] = useState('');
   const [interactionOccurred, setInteractionOccurred] = useState('');
 
-  const interactionMutation = useMutation({
-    mutationFn: async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) throw new Error('Unauthenticated user context');
-      if (!id) throw new Error('No client selected');
-
-      const { error } = await supabase.from('interactions').insert({
-        agent_id: userId,
-        client_id: id,
-        type: interactionType,
-        summary: interactionSummary,
-        outcome: interactionOutcome || null,
-        occurred_at: interactionOccurred ? new Date(interactionOccurred).toISOString() : new Date().toISOString()
-      });
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Interaction logged successfully.');
-      setShowInteractionModal(false);
-      setInteractionSummary('');
-      setInteractionOutcome('');
-      setInteractionOccurred('');
-      queryClient.invalidateQueries({ queryKey: ['clientInteractions', id] });
-      queryClient.invalidateQueries({ queryKey: ['activitiesFeed'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error occurred saving interaction logs.');
-    }
-  });
+  const interactionMutation = useCreateInteractionMutation(userId);
 
   // ADD Reminder mutation
   const [reminderTitle, setReminderTitle] = useState('');
   const [reminderDue, setReminderDue] = useState('');
   const [reminderPropId, setReminderPropId] = useState('');
 
-  const reminderMutation = useMutation({
-    mutationFn: async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) throw new Error('Unauthenticated user context');
-      if (!id) throw new Error('No client context');
-
-      const { error } = await supabase.from('reminders').insert({
-        agent_id: userId,
-        client_id: id,
-        title: reminderTitle,
-        due_at: new Date(reminderDue).toISOString(),
-        property_id: reminderPropId || null,
-        status: 'pending'
-      });
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Task follow-up reminder configured successfully.');
-      setShowReminderModal(false);
-      setReminderTitle('');
-      setReminderDue('');
-      setReminderPropId('');
-      queryClient.invalidateQueries({ queryKey: ['clientReminders', id] });
-      queryClient.invalidateQueries({ queryKey: ['agentReminders'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error configuring reminder logs.');
-    }
-  });
+  const reminderMutation = useCreateReminderMutation(userId);
 
   // Interaction icon helper
   const getInteractionIcon = (type: string) => {
@@ -290,22 +145,21 @@ export const ClientDetail: React.FC = () => {
 
   if (isClientLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 min-h-[70vh]">
-        <Loader2 className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        <p className="mt-4 text-slate-500 text-xs font-sans">Retrieving client record dossiers...</p>
+      <div className="min-h-[70vh]">
+        <LoadingSpinner message="Retrieving client record dossiers..." fullPage />
       </div>
     );
   }
 
   if (isClientError || !client) {
     return (
-      <div className="text-center py-24 bg-slate-50">
-        <User className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-        <h3 className="text-lg font-bold text-slate-900">CRM records unavailable</h3>
-        <p className="text-slate-500 text-xs mt-1 font-sans">The requested customer could not be mapped inside the tenant data workspace.</p>
-        <Link to="/dashboard/clients" className="mt-6 inline-block bg-slate-900 text-white text-xs font-extrabold px-4 py-2 rounded-xl">
-          Return to directory
-        </Link>
+      <div className="py-16">
+        <ErrorState
+          title="CRM records unavailable"
+          description={getErrorMessage(clientError, 'The requested customer could not be mapped inside the tenant data workspace.')}
+          onRetry={() => refetchClient()}
+          retryLabel="Retry"
+        />
       </div>
     );
   }
@@ -481,7 +335,30 @@ export const ClientDetail: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={() => updateProfileMutation.mutate()}
+                    onClick={() =>
+                      updateProfileMutation.mutate(
+                        {
+                          full_name: editedName,
+                          email: editedEmail,
+                          phone: editedPhone,
+                          client_type: editedType,
+                          status: editedStatus,
+                          notes: editedNotes,
+                          source: editedSource,
+                        },
+                        {
+                          onSuccess: () => {
+                            toast.success('Client profile parameters updated.');
+                            setIsEditingProfile(false);
+                            queryClient.invalidateQueries({ queryKey: clientQueryKeys.detail(id) });
+                            queryClient.invalidateQueries({ queryKey: clientQueryKeys.agentList(userId) });
+                          },
+                          onError: (err) => {
+                            toast.error(getErrorMessage(err, 'Error occurred while saving profile changes.'));
+                          }
+                        }
+                      )
+                    }
                     disabled={updateProfileMutation.isPending}
                     className="flex-1 text-center py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition"
                   >
@@ -619,7 +496,33 @@ export const ClientDetail: React.FC = () => {
             <form 
               onSubmit={(e) => {
                 e.preventDefault();
-                interactionMutation.mutate();
+                if (!userId || !id) {
+                  toast.error('Unauthenticated user context');
+                  return;
+                }
+                interactionMutation.mutate(
+                  {
+                    client_id: id,
+                    type: interactionType,
+                    summary: interactionSummary,
+                    outcome: interactionOutcome,
+                    occurred_at: interactionOccurred,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success('Interaction logged successfully.');
+                      setShowInteractionModal(false);
+                      setInteractionSummary('');
+                      setInteractionOutcome('');
+                      setInteractionOccurred('');
+                      queryClient.invalidateQueries({ queryKey: interactionQueryKeys.clientList(id) });
+                      queryClient.invalidateQueries({ queryKey: interactionQueryKeys.recentFeed(userId) });
+                    },
+                    onError: (err) => {
+                      toast.error(getErrorMessage(err, 'Error occurred saving interaction logs.'));
+                    }
+                  }
+                );
               }}
               className="space-y-4 text-xs font-semibold"
             >
@@ -706,7 +609,33 @@ export const ClientDetail: React.FC = () => {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                reminderMutation.mutate();
+                if (!userId || !id) {
+                  toast.error('Unauthenticated user context');
+                  return;
+                }
+                reminderMutation.mutate(
+                  {
+                    client_id: id,
+                    title: reminderTitle,
+                    due_at: new Date(reminderDue).toISOString(),
+                    property_id: reminderPropId || null,
+                    status: 'pending',
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success('Task follow-up reminder configured successfully.');
+                      setShowReminderModal(false);
+                      setReminderTitle('');
+                      setReminderDue('');
+                      setReminderPropId('');
+                      queryClient.invalidateQueries({ queryKey: reminderQueryKeys.clientList(id) });
+                      queryClient.invalidateQueries({ queryKey: reminderQueryKeys.agentList(userId) });
+                    },
+                    onError: (err) => {
+                      toast.error(getErrorMessage(err, 'Error configuring reminder logs.'));
+                    }
+                  }
+                );
               }}
               className="space-y-4 text-xs font-semibold"
             >

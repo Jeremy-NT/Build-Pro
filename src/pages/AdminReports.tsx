@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { eachDayOfInterval, subDays, format, parseISO } from 'date-fns';
-import { LoadingSpinner, EmptyState } from '../components/common/FeedbackStates';
-import { formatDateString } from '../lib/format';
+import { LoadingSpinner, EmptyState } from '../shared/components/FeedbackStates';
+import { formatDateString } from '../shared/utils/format';
 import { BarChart3, TrendingUp, Building2, MessageSquare, Award, PieChartIcon } from 'lucide-react';
 
 export const AdminReports: React.FC = () => {

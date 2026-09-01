@@ -1,32 +1,21 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
-  Plus, Calendar, Clock, CheckSquare, Trash, EyeOff, Loader2, AlertTriangle, 
-  CheckCircle2, CornerDownRight, Ban, Eye
+  Plus, Calendar, Clock, CheckSquare, Trash, AlertTriangle, 
+  CornerDownRight, Ban
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
-
-interface Reminder {
-  id: string;
-  agent_id: string;
-  client_id: string | null;
-  property_id: string | null;
-  title: string;
-  due_at: string;
-  status: 'pending' | 'completed' | 'dismissed';
-  created_at: string;
-  clients?: {
-    full_name: string;
-  } | null;
-  properties?: {
-    title: string;
-  } | null;
-}
+import { useAuth } from '../hooks/useAuth';
+import { reminderQueryKeys, useAgentRemindersQuery, useCreateReminderMutation, useDeleteReminderMutation, useUpdateReminderStatusMutation } from '../features/reminders/hooks/useReminderQueries';
+import { dashboardQueryKeys } from '../features/dashboard/hooks/useDashboardQueries';
+import { EmptyState, ErrorState, LoadingSpinner } from '../shared/components/FeedbackStates';
+import { getErrorMessage } from '../shared/utils/error';
 
 export const RemindersList: React.FC = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'completed' | 'dismissed'>('all');
 
   // Quick-Add Form state
@@ -37,129 +26,49 @@ export const RemindersList: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Fetch reminders with joined clients and properties
-  const { data: reminders, isLoading, isError, refetch } = useQuery<Reminder[]>({
-    queryKey: ['agentReminders'],
-    queryFn: async () => {
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session?.session?.user?.id;
-      if (!userId) throw new Error('Unauthenticated user context');
+  const { data: reminders = [], isLoading, isError, error, refetch } = useAgentRemindersQuery(userId);
 
-      const { data, error } = await supabase
-        .from('reminders')
-        .select(`
-          *,
-          clients(full_name),
-          properties(title)
-        `)
-        .eq('agent_id', userId)
-        .order('due_at', { ascending: true });
+  const createMutation = useCreateReminderMutation(userId);
 
-      if (error) throw error;
-      return (data || []) as any[];
-    }
-  });
+  const completeMutation = useUpdateReminderStatusMutation();
 
-  // Create Quick Mutation
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session?.session?.user?.id;
-      if (!userId) throw new Error('Unauthenticated account session');
+  const dismissMutation = useUpdateReminderStatusMutation();
 
-      const { error } = await supabase.from('reminders').insert({
-        agent_id: userId,
-        title: quickTitle,
-        due_at: new Date(quickDue).toISOString(),
-        status: 'pending'
-      });
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('New follow-up task added to checklist!');
-      setQuickTitle('');
-      setQuickDue('');
-      queryClient.invalidateQueries({ queryKey: ['agentReminders'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardKPIs'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error occurred while saving new reminder.');
-    }
-  });
-
-  // Complete mutation
-  const completeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('reminders')
-        .update({ status: 'completed' })
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Task marked as completed.');
-      queryClient.invalidateQueries({ queryKey: ['agentReminders'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardKPIs'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error updating status.');
-    }
-  });
-
-  // Dismiss mutation
-  const dismissMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('reminders')
-        .update({ status: 'dismissed' })
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Task follow-up dismissed.');
-      queryClient.invalidateQueries({ queryKey: ['agentReminders'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardKPIs'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error dismissing reminder.');
-    }
-  });
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('reminders')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Reminder deleted successfully.');
-      setDeleteId(null);
-      queryClient.invalidateQueries({ queryKey: ['agentReminders'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardKPIs'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error deleting reminder.');
-      setDeleteId(null);
-    }
-  });
+  const deleteMutation = useDeleteReminderMutation();
 
   const handleQuickAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId) {
+      toast.error('Unauthenticated account session');
+      return;
+    }
     if (!quickTitle.trim() || !quickDue) {
       toast.error('Please enter a descriptive title and deadline due date');
       return;
     }
-    createMutation.mutate();
+    createMutation.mutate(
+      {
+        title: quickTitle,
+        due_at: new Date(quickDue).toISOString(),
+        status: 'pending',
+      },
+      {
+        onSuccess: () => {
+          toast.success('New follow-up task added to checklist!');
+          setQuickTitle('');
+          setQuickDue('');
+          queryClient.invalidateQueries({ queryKey: reminderQueryKeys.agentList(userId) });
+          queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.kpis(userId) });
+        },
+        onError: (err) => {
+          toast.error(getErrorMessage(err, 'Error occurred while saving new reminder.'));
+        }
+      }
+    );
   };
 
   // Filter list by tab select
-  const filteredReminders = (reminders || []).filter((rem) => {
+  const filteredReminders = reminders.filter((rem) => {
     if (activeTab === 'all') return true;
     return rem.status === activeTab;
   });
@@ -250,24 +159,21 @@ export const RemindersList: React.FC = () => {
 
       {/* LIST SECTION */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          <p className="mt-3 text-slate-500 text-xs font-sans">Compiling reminders dossier...</p>
+        <div className="bg-white border border-slate-100 rounded-2xl">
+          <LoadingSpinner message="Compiling reminders dossier..." />
         </div>
       ) : isError ? (
-        <div className="p-8 text-center bg-white border border-slate-100 rounded-2xl">
-          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-2" />
-          <p className="text-slate-800 text-xs font-bold font-sans">Error reading reminders</p>
-          <p className="text-slate-500 text-[11px] mt-0.5">Could not authenticate table structures or query reminders data rows.</p>
-        </div>
+        <ErrorState
+          title="Error reading reminders"
+          description={getErrorMessage(error, 'Could not authenticate table structures or query reminders data rows.')}
+          onRetry={() => refetch()}
+        />
       ) : filteredReminders.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-slate-100 rounded-2xl shadow-sm text-xs">
-          <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-sm font-bold text-slate-800">Clear calendar list</h3>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-normal">
-            You do not have any {activeTab !== 'all' ? `${activeTab} ` : ''}reminders synchronized currently.
-          </p>
-        </div>
+        <EmptyState
+          icon={<Calendar className="w-8 h-8" />}
+          title="Clear calendar list"
+          description={`You do not have any ${activeTab !== 'all' ? `${activeTab} ` : ''}reminders synchronized currently.`}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
           {filteredReminders.map((rem) => {
@@ -330,7 +236,21 @@ export const RemindersList: React.FC = () => {
                   {rem.status === 'pending' && (
                     <>
                       <button
-                        onClick={() => completeMutation.mutate(rem.id)}
+                        onClick={() =>
+                          completeMutation.mutate(
+                            { id: rem.id, status: 'completed' },
+                            {
+                              onSuccess: () => {
+                                toast.success('Task marked as completed.');
+                                queryClient.invalidateQueries({ queryKey: reminderQueryKeys.agentList(userId) });
+                                queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.kpis(userId) });
+                              },
+                              onError: (err) => {
+                                toast.error(getErrorMessage(err, 'Error updating status.'));
+                              }
+                            }
+                          )
+                        }
                         disabled={completeMutation.isPending}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-transparent rounded-lg font-bold transition flex items-center gap-1 cursor-pointer"
                         title="Mark Completed"
@@ -340,7 +260,21 @@ export const RemindersList: React.FC = () => {
                       </button>
 
                       <button
-                        onClick={() => dismissMutation.mutate(rem.id)}
+                        onClick={() =>
+                          dismissMutation.mutate(
+                            { id: rem.id, status: 'dismissed' },
+                            {
+                              onSuccess: () => {
+                                toast.success('Task follow-up dismissed.');
+                                queryClient.invalidateQueries({ queryKey: reminderQueryKeys.agentList(userId) });
+                                queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.kpis(userId) });
+                              },
+                              onError: (err) => {
+                                toast.error(getErrorMessage(err, 'Error dismissing reminder.'));
+                              }
+                            }
+                          )
+                        }
                         disabled={dismissMutation.isPending}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg border border-transparent font-bold text-slate-600 transition flex items-center gap-1 cursor-pointer"
                         title="Dismiss Task"
@@ -382,7 +316,20 @@ export const RemindersList: React.FC = () => {
                 Cancel
               </button>
               <button
-                onClick={() => deleteMutation.mutate(deleteId)}
+                onClick={() =>
+                  deleteMutation.mutate(deleteId, {
+                    onSuccess: () => {
+                      toast.success('Reminder deleted successfully.');
+                      setDeleteId(null);
+                      queryClient.invalidateQueries({ queryKey: reminderQueryKeys.agentList(userId) });
+                      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.kpis(userId) });
+                    },
+                    onError: (err) => {
+                      toast.error(getErrorMessage(err, 'Error deleting reminder.'));
+                      setDeleteId(null);
+                    }
+                  })
+                }
                 disabled={deleteMutation.isPending}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow cursor-pointer"
               >

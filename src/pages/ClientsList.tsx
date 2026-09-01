@@ -1,48 +1,22 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Plus, User, Phone, Mail, Calendar, AlertTriangle, Loader2 } from 'lucide-react';
-
-interface Client {
-  id: string;
-  agent_id: string;
-  full_name: string;
-  email: string | null;
-  phone: string | null;
-  client_type: 'buyer' | 'renter' | 'seller' | 'investor' | null;
-  status: 'lead' | 'active' | 'closed' | 'inactive';
-  notes: string | null;
-  source: string | null;
-  created_at: string;
-}
+import { Search, Plus, User, Phone, Mail } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useAgentClientsQuery } from '../features/clients/hooks/useClientQueries';
+import { LoadingSpinner, EmptyState, ErrorState } from '../shared/components/FeedbackStates';
+import { getErrorMessage } from '../shared/utils/error';
 
 export const ClientsList: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Fetch clients for logged in Agent
-  const { data: clients, isLoading, isError } = useQuery<Client[]>({
-    queryKey: ['agentClients'],
-    queryFn: async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) throw new Error('Unauthenticated user session');
-
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('agent_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as Client[];
-    }
-  });
+  const { data: clients = [], isLoading, isError, error, refetch } = useAgentClientsQuery(userId);
 
   // Filter list
-  const filteredClients = (clients || []).filter((client) => {
+  const filteredClients = clients.filter((client) => {
     const matchesSearch = client.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (client.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -115,30 +89,23 @@ export const ClientsList: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          <p className="mt-3 text-slate-500 text-xs font-sans">Compiling clients index...</p>
+        <div className="bg-white border border-slate-100 rounded-2xl">
+          <LoadingSpinner message="Compiling clients index..." />
         </div>
       ) : isError ? (
-        <div className="p-8 text-center bg-white border border-slate-100 rounded-2xl">
-          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-2" />
-          <p className="text-slate-800 text-xs font-bold font-sans">Error reading clients</p>
-          <p className="text-slate-500 text-[11px] mt-0.5">Could not authenticate metadata or load CRM records.</p>
-        </div>
+        <ErrorState
+          title="Error reading clients"
+          description={getErrorMessage(error, 'Could not authenticate metadata or load CRM records.')}
+          onRetry={() => refetch()}
+        />
       ) : filteredClients.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-slate-100 rounded-2xl shadow-sm">
-          <User className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-sm font-bold text-slate-800">No matching clients found</h3>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 mb-5">
-            You do not have any CRM contacts conforming to these filters. Initialize a record today.
-          </p>
-          <Link
-            to="/dashboard/clients/new"
-            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold"
-          >
-            Create Client Profile
-          </Link>
-        </div>
+        <EmptyState
+          icon={<User className="w-8 h-8" />}
+          title="No matching clients found"
+          description="You do not have any CRM contacts conforming to these filters. Initialize a record today."
+          actionLabel="Create Client Profile"
+          onAction={() => navigate('/dashboard/clients/new')}
+        />
       ) : (
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden text-xs">
           <div className="overflow-x-auto">

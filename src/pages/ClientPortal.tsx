@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState } from '../components/common/FeedbackStates';
-import { formatDateTimeString } from '../lib/format';
+import { LoadingSpinner, EmptyState } from '../shared/components/FeedbackStates';
+import { formatDateTimeString } from '../shared/utils/format';
 import { UserSettings } from './UserSettings';
 import { 
   Building2, MapPin, Settings, Layout, MessageSquareReply, ArrowUpRight 

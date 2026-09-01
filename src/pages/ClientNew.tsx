@@ -3,10 +3,12 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, User, Phone, Mail, Save, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../hooks/useAuth';
+import { clientQueryKeys, useCreateClientMutation } from '../features/clients/hooks/useClientQueries';
+import { getErrorMessage } from '../shared/utils/error';
 
 const clientFormSchema = z.object({
   full_name: z.string().min(2, { message: 'Full name is required' }),
@@ -24,6 +26,8 @@ export const ClientNew: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id;
 
   // Retrieve query params for pre-filling if coming from Inquiries
   const queryName = searchParams.get('name') || '';
@@ -57,44 +61,28 @@ export const ClientNew: React.FC = () => {
     if (querySource) setValue('source', querySource);
   }, [queryName, queryEmail, queryPhone, querySource, setValue]);
 
-  // Insert mutation
-  const createMutation = useMutation({
-    mutationFn: async (values: ClientFormValues) => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) throw new Error('Unauthenticated account context');
-
-      const { data, error } = await supabase.from('clients').insert({
-        agent_id: userId,
-        full_name: values.full_name,
-        email: values.email || null,
-        phone: values.phone || null,
-        client_type: values.client_type,
-        status: values.status,
-        notes: values.notes || null,
-        source: values.source || null,
-      }).select().single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      toast.success('Successfully added client profile to database.');
-      queryClient.invalidateQueries({ queryKey: ['agentClients'] });
-      // Go to client details page
-      if (data && data.id) {
-        navigate(`/dashboard/clients/${data.id}`);
-      } else {
-        navigate('/dashboard/clients');
-      }
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error occurred while inserting CRM client record.');
-    },
-  });
+  const createMutation = useCreateClientMutation(userId);
 
   const onSubmit = (values: ClientFormValues) => {
-    createMutation.mutate(values);
+    if (!userId) {
+      toast.error('Unauthenticated account context');
+      return;
+    }
+
+    createMutation.mutate(values, {
+      onSuccess: (data) => {
+        toast.success('Successfully added client profile to database.');
+        queryClient.invalidateQueries({ queryKey: clientQueryKeys.agentList(userId) });
+        if (data && data.id) {
+          navigate(`/dashboard/clients/${data.id}`);
+        } else {
+          navigate('/dashboard/clients');
+        }
+      },
+      onError: (err) => {
+        toast.error(getErrorMessage(err, 'Error occurred while inserting CRM client record.'));
+      },
+    });
   };
 
   return (

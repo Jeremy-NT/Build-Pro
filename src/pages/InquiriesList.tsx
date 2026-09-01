@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Mail, Phone, MessageSquare, AlertTriangle, Loader2, ArrowRight,
+  Mail, Phone, MessageSquare, ArrowRight,
   Send, UserPlus, CheckCircle2, Clock, Inbox, Check
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { dashboardQueryKeys } from '../features/dashboard/hooks/useDashboardQueries';
+import { inquiryQueryKeys, useAgentInquiriesQuery, useMarkInquiryReadMutation, useReplyToInquiryMutation } from '../features/inquiries/hooks/useInquiryQueries';
+import { EmptyState, ErrorState, LoadingSpinner } from '../shared/components/FeedbackStates';
+import { getErrorMessage } from '../shared/utils/error';
 
 interface Inquiry {
   id: string;
@@ -40,34 +44,7 @@ export const InquiriesList: React.FC = () => {
   const [replyText, setReplyText] = useState('');
 
   // Fetch inquiries for Agent properties (or all if admin)
-  const { data: inquiries, isLoading, isError } = useQuery<Inquiry[]>({
-    queryKey: ['agentInquiries', userId, isAdmin],
-    queryFn: async () => {
-      if (!userId) throw new Error('Unauthenticated user database context');
-
-      let query = supabase
-        .from('inquiries')
-        .select(`
-          *,
-          properties:property_id!inner (
-            id,
-            title,
-            agent_id
-          )
-        `);
-
-      // If not admin, restrict of course to listings managed by this agent
-      if (!isAdmin) {
-        query = query.eq('properties.agent_id', userId);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as any[];
-    },
-    enabled: !!userId,
-  });
+  const { data: inquiries = [], isLoading, isError, error, refetch } = useAgentInquiriesQuery(userId, isAdmin);
 
   // REALTIME SUBSCRIPTION setup
   useEffect(() => {
@@ -96,8 +73,8 @@ export const InquiriesList: React.FC = () => {
                   `📬 New inquiry received on "${prop.title}" from ${newInq.sender_name}!`,
                   { duration: 6000, icon: '⚡' }
                 );
-                queryClient.invalidateQueries({ queryKey: ['agentInquiries'] });
-                queryClient.invalidateQueries({ queryKey: ['dashboardKPIs'] });
+                queryClient.invalidateQueries({ queryKey: inquiryQueryKeys.agentList(userId, isAdmin) });
+                queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.kpis(userId) });
               }
             }
           } catch (err) {
@@ -113,54 +90,21 @@ export const InquiriesList: React.FC = () => {
   }, [userId, isAdmin, queryClient]);
 
   // Reply Submit Mutation
-  const replyMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedInquiry) throw new Error('No inquiry row active');
-      const { error } = await supabase
-        .from('inquiries')
-        .update({
-          status: 'responded',
-          agent_reply: replyText,
-          replied_at: new Date().toISOString()
-        })
-        .eq('id', selectedInquiry.id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Reply submitted successfully & status marked Responded.');
-      const inqId = selectedInquiry?.id;
-      setReplyText('');
-      setSelectedInquiry(null);
-      queryClient.invalidateQueries({ queryKey: ['agentInquiries'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardKPIs'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error occurred while saving reply.');
-    }
-  });
+  const replyMutation = useReplyToInquiryMutation();
 
   // Mark inquiry as Read if it was New when opened
-  const markAsReadMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('inquiries')
-        .update({ status: 'read' })
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agentInquiries'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardKPIs'] });
-    }
-  });
+  const markAsReadMutation = useMarkInquiryReadMutation();
 
   const handleRowClick = (inq: Inquiry) => {
     setSelectedInquiry(inq);
     setReplyText(inq.agent_reply || '');
     if (inq.status === 'new') {
-      markAsReadMutation.mutate(inq.id);
+      markAsReadMutation.mutate(inq.id, {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: inquiryQueryKeys.agentList(userId, isAdmin) });
+          queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.kpis(userId) });
+        },
+      });
     }
   };
 
@@ -194,24 +138,21 @@ export const InquiriesList: React.FC = () => {
 
       {/* Main List Table */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          <p className="mt-3 text-slate-500 text-xs font-sans">Loading inquirers databases...</p>
+        <div className="bg-white border border-slate-100 rounded-2xl">
+          <LoadingSpinner message="Loading inquirers databases..." />
         </div>
       ) : isError ? (
-        <div className="p-8 text-center bg-white border border-slate-100 rounded-2xl">
-          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-2" />
-          <p className="text-slate-800 text-xs font-bold font-sans">Error reading inquiries</p>
-          <p className="text-slate-500 text-[11px] mt-0.5">Could not authenticate table relationships or execute PostgreSQL SELECT queries.</p>
-        </div>
+        <ErrorState
+          title="Error reading inquiries"
+          description={getErrorMessage(error, 'Could not authenticate table relationships or execute PostgreSQL SELECT queries.')}
+          onRetry={() => refetch()}
+        />
       ) : inquiries.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-slate-100 rounded-2xl shadow-sm text-xs">
-          <Inbox className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-sm font-bold text-slate-800">Inquiry queue clear</h3>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-normal text-center">
-            You do not have any inquiries on your properties. Broadcast listing links to receive raw responses!
-          </p>
-        </div>
+        <EmptyState
+          icon={<Inbox className="w-8 h-8" />}
+          title="Inquiry queue clear"
+          description="You do not have any inquiries on your properties. Broadcast listing links to receive raw responses!"
+        />
       ) : (
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden text-xs">
           <div className="overflow-x-auto">
@@ -323,7 +264,25 @@ export const InquiriesList: React.FC = () => {
             <form 
               onSubmit={(e) => {
                 e.preventDefault();
-                replyMutation.mutate();
+                if (!selectedInquiry) {
+                  toast.error('No inquiry row active');
+                  return;
+                }
+                replyMutation.mutate(
+                  { id: selectedInquiry.id, replyText },
+                  {
+                    onSuccess: () => {
+                      toast.success('Reply submitted successfully & status marked Responded.');
+                      setReplyText('');
+                      setSelectedInquiry(null);
+                      queryClient.invalidateQueries({ queryKey: inquiryQueryKeys.agentList(userId, isAdmin) });
+                      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.kpis(userId) });
+                    },
+                    onError: (err) => {
+                      toast.error(getErrorMessage(err, 'Error occurred while saving reply.'));
+                    }
+                  }
+                );
               }}
               className="space-y-4 pt-1"
             >
