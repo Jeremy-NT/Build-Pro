@@ -1,7 +1,5 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { 
   Building2, Users, MessageSquare, CheckCircle, 
@@ -22,6 +20,9 @@ import { InquiriesList } from './InquiriesList';
 import { AgentReports } from './AgentReports';
 import { UserSettings } from './UserSettings';
 import { BarChart3 } from 'lucide-react';
+import { useDashboardKpisQuery } from '../features/dashboard/hooks/useDashboardQueries';
+import { useUpcomingRemindersQuery } from '../features/reminders/hooks/useReminderQueries';
+import { useRecentInteractionsQuery } from '../features/interactions/hooks/useInteractionQueries';
 
 export const AgentDashboard: React.FC = () => {
   const { user, profile, signOut } = useAuth();
@@ -51,89 +52,13 @@ export const AgentDashboard: React.FC = () => {
   const activeTab = getActiveTab();
 
   // 1. Fetch live metrics stats for KPIs
-  const { data: kpis, isLoading: isKpisLoading } = useQuery({
-    queryKey: ['dashboardKPIs', userId],
-    queryFn: async () => {
-      if (!userId) return null;
-      
-      // Active listings assigned to current user
-      const { count: activeListings } = await supabase
-        .from('properties')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', userId)
-        .eq('status', 'available');
-
-      // Active clients
-      const { count: activeClients } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', userId)
-        .eq('status', 'active');
-
-      // Pending reminders
-      const { count: pendingReminders } = await supabase
-        .from('reminders')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', userId)
-        .eq('status', 'pending');
-
-      // Inquiries last 7 days
-      const lastWeek = new Date();
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      const { data: recentInqs } = await supabase
-        .from('inquiries')
-        .select(`
-          id,
-          created_at,
-          properties!inner(agent_id)
-        `)
-        .eq('properties.agent_id', userId)
-        .gte('created_at', lastWeek.toISOString());
-
-      return {
-        activeListings: activeListings || 0,
-        activeClients: activeClients || 0,
-        pendingReminders: pendingReminders || 0,
-        recentInquiries: recentInqs?.length || 0,
-      };
-    },
-    enabled: !!userId,
-  });
+  const { data: kpis, isLoading: isKpisLoading } = useDashboardKpisQuery(userId);
 
   // 2. Fetch upcoming reminders (max 5 upcoming pending)
-  const { data: upcomingReminders, isLoading: isRemindersLoading } = useQuery<any[]>({
-    queryKey: ['dashboardUpcomingReminders', userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('reminders')
-        .select('*, clients(full_name)')
-        .eq('agent_id', userId)
-        .eq('status', 'pending')
-        .order('due_at', { ascending: true })
-        .limit(5);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!userId,
-  });
+  const { data: upcomingReminders = [], isLoading: isRemindersLoading } = useUpcomingRemindersQuery(userId, 5);
 
   // 3. Fetch recent interactions (max 10 chronological)
-  const { data: recentInteractions, isLoading: isInteractionsLoading } = useQuery<any[]>({
-    queryKey: ['activitiesFeed', userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('interactions')
-        .select('*, clients(full_name)')
-        .eq('agent_id', userId)
-        .order('occurred_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!userId,
-  });
+  const { data: recentInteractions = [], isLoading: isInteractionsLoading } = useRecentInteractionsQuery(userId);
 
   // Helper interaction icon mapping
   const getInteractionIcon = (type: string) => {

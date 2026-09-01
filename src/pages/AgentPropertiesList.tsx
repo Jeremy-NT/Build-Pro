@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  Plus, Search, Edit2, Archive, CheckCircle, AlertTriangle, 
-  Trash, Eye, Loader2, RefreshCw, X, Building, Home
+  Plus, Search, Edit2, Archive, Eye, RefreshCw, Building, Home
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import type { Property } from '../shared/types/domain';
 import { formatPriceCompact } from '../shared/utils/format';
+import { LoadingSpinner, EmptyState, ErrorState } from '../shared/components/FeedbackStates';
+import { getErrorMessage } from '../shared/utils/error';
+import { useAuth } from '../hooks/useAuth';
+import { propertyQueryKeys, useAgentPropertiesQuery, useArchivePropertyMutation } from '../features/properties/hooks/usePropertyQueries';
 
 export const AgentPropertiesList: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id;
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,54 +25,28 @@ export const AgentPropertiesList: React.FC = () => {
   const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null);
 
   // Fetch Agent listings
-  const { data: properties, isLoading, isError, refetch } = useQuery<Property[]>({
-    queryKey: ['agentProperties'],
-    queryFn: async () => {
-      // First get active session user ID
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) throw new Error('Unauthenticated user context');
+  const { data: properties = [], isLoading, isError, error, refetch } = useAgentPropertiesQuery(userId);
 
-      const { data, error } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('agent_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as Property[];
-    }
-  });
-
-  // Archive mutation
-  const archiveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('properties')
-        .update({ status: 'archived' })
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Property listing has been archived successfully.');
-      queryClient.invalidateQueries({ queryKey: ['agentProperties'] });
-      setArchiveTargetId(null);
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Error occurred while archiving the listing.');
-      setArchiveTargetId(null);
-    }
-  });
+  const archiveMutation = useArchivePropertyMutation();
 
   const handleArchiveConfirm = () => {
     if (archiveTargetId) {
-      archiveMutation.mutate(archiveTargetId);
+      archiveMutation.mutate(archiveTargetId, {
+        onSuccess: () => {
+          toast.success('Property listing has been archived successfully.');
+          queryClient.invalidateQueries({ queryKey: propertyQueryKeys.agentList(userId) });
+          setArchiveTargetId(null);
+        },
+        onError: (err) => {
+          toast.error(getErrorMessage(err, 'Error occurred while archiving the listing.'));
+          setArchiveTargetId(null);
+        }
+      });
     }
   };
 
   // Filter listings based on Agent choices
-  const filteredList = (properties || []).filter((prop) => {
+  const filteredList = properties.filter((prop) => {
     const matchesSearch = prop.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           prop.location_city.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           prop.location_area.toLowerCase().includes(searchTerm.toLowerCase());
@@ -156,30 +133,23 @@ export const AgentPropertiesList: React.FC = () => {
 
       {/* Table & Empty States */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl">
-          <Loader2 className="w-8 h-8 border-4 text-blue-600 animate-spin" />
-          <p className="mt-3 text-slate-500 text-xs font-sans">Compiling property table rows...</p>
+        <div className="bg-white border border-slate-100 rounded-2xl">
+          <LoadingSpinner message="Compiling property table rows..." />
         </div>
       ) : isError ? (
-        <div className="p-8 text-center bg-white border border-slate-100 rounded-2xl">
-          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-2" />
-          <p className="text-slate-800 text-xs font-bold font-sans">Error reading properties</p>
-          <p className="text-slate-500 text-[11px] mt-0.5">Could not authenticate metadata or load properties rows.</p>
-        </div>
+        <ErrorState
+          title="Error reading properties"
+          description={getErrorMessage(error, 'Could not authenticate metadata or load properties rows.')}
+          onRetry={() => refetch()}
+        />
       ) : filteredList.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-slate-100 rounded-2xl shadow-sm">
-          <Building className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-sm font-bold text-slate-800">No properties align here</h3>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 mb-5">
-            You have not configured any property matching these search options. Create a new listing row today.
-          </p>
-          <Link
-            to="/dashboard/properties/new"
-            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold"
-          >
-            Create Property Listing
-          </Link>
-        </div>
+        <EmptyState
+          icon={<Building className="w-8 h-8" />}
+          title="No properties align here"
+          description="You have not configured any property matching these search options. Create a new listing row today."
+          actionLabel="Create Property Listing"
+          onAction={() => navigate('/dashboard/properties/new')}
+        />
       ) : (
         /* Responsive Desktop Table / Mobile Cards */
         <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
